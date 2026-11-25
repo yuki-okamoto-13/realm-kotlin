@@ -16,6 +16,7 @@
 import org.gradle.kotlin.dsl.apply
 import org.realm.kotlin.getPropertyValue
 import org.jetbrains.kotlin.gradle.dsl.JvmTarget
+import javax.inject.Inject
 
 plugins {
     id("com.android.library") apply false
@@ -159,10 +160,18 @@ tasks.register("publishCIPackages") {
     }
 }
 
+// Define an interface to allow Gradle to inject the ExecOperations service.
+// See Gradle doc: https://docs.gradle.org/current/userguide/service_injection.html#execoperations
+interface ExecOpsProvider {
+    @get:Inject
+    val execOps: ExecOperations
+}
+
 tasks.register("uploadDokka") {
     dependsOn("dokkaHtmlMultiModule")
     group = "Release"
     description = "Upload SDK docs to S3"
+    val injectedExecOps = project.objects.newInstance<ExecOpsProvider>()
     doLast {
         val awsAccessKey = getPropertyValue(this.project, "SDK_DOCS_AWS_ACCESS_KEY")
         val awsSecretKey = getPropertyValue(this.project, "SDK_DOCS_AWS_SECRET_KEY")
@@ -177,7 +186,7 @@ tasks.register("uploadDokka") {
         // Upload two copies, to 'latest' and a versioned folder for posterity.
         // Symlinks would have been safer and faster, but this is not supported by S3.
         listOf(Realm.version, "latest").forEach { version: String ->
-            exec {
+            injectedExecOps.execOps.exec {
                 commandLine = listOf(
                     "s3cmd",
                     "put",

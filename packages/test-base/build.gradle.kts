@@ -288,6 +288,9 @@ kotlin {
 tasks.withType<KotlinCompilationTask<*>>().configureEach {
     compilerOptions {
         freeCompilerArgs.add("-Xexpect-actual-classes")
+        // The compiler plugin is added directly to the classpath above, bypassing the Gradle
+        // plugin, so mirror the plugin ordering it applies (see RealmCompilerSubplugin).
+        freeCompilerArgs.add("-Xcompiler-plugin-order=org.jetbrains.kotlinx.serialization>io.realm.kotlin")
     }
 }
 

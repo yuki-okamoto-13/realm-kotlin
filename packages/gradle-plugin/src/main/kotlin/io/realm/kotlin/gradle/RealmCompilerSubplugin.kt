@@ -34,6 +34,10 @@ class RealmCompilerSubplugin : KotlinCompilerPluginSupportPlugin {
 
         // The id used for passing compiler options from command line
         const val compilerPluginId = "com.infomaniak.realm.kotlin"
+
+        // `pluginId`s of the compiler plugins' `CompilerPluginRegistrar`s, used for ordering them.
+        private const val REALM_COMPILER_PLUGIN_ID = "io.realm.kotlin"
+        private const val SERIALIZATION_COMPILER_PLUGIN_ID = "org.jetbrains.kotlinx.serialization"
     }
 
     override fun isApplicable(kotlinCompilation: KotlinCompilation<*>): Boolean {
@@ -49,12 +53,19 @@ class RealmCompilerSubplugin : KotlinCompilerPluginSupportPlugin {
         return SubpluginArtifact(groupId, artifactId, version)
     }
 
-    override fun getPluginArtifactForNative(): SubpluginArtifact {
-        return SubpluginArtifact(groupId, artifactId, version)
-    }
-
     override fun applyToCompilation(kotlinCompilation: KotlinCompilation<*>): Provider<List<SubpluginOption>> {
         val project = kotlinCompilation.target.project
+
+        // Run our compiler plugin after kotlinx.serialization. Otherwise the serialization plugin
+        // sees our internal attributes and the compilation of `@Serializable` model classes fails
+        // (see https://github.com/realm/realm-kotlin/issues/1251). The ids are the `pluginId`s of
+        // the respective `CompilerPluginRegistrar`s. The constraint is ignored if serialization
+        // is not applied.
+        kotlinCompilation.compileTaskProvider.configure {
+            it.compilerOptions.freeCompilerArgs.add(
+                "-Xcompiler-plugin-order=$SERIALIZATION_COMPILER_PLUGIN_ID>$REALM_COMPILER_PLUGIN_ID"
+            )
+        }
 
         return project.provider { emptyList() }
     }

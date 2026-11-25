@@ -479,7 +479,7 @@ val copyJVMSharedLibs: TaskProvider<Task> by tasks.registering {
             .map { it.trim() }
             .map { it.lowercase() }
 
-        val buildDir = layout.buildDirectory
+        val buildDir = layout.buildDirectory.get().asFile
         archs.forEach { arch ->
             when(arch) {
                 "linux" -> {
@@ -546,7 +546,7 @@ interface ExecOpsProvider {
 fun Task.buildSharedLibrariesForJVMMacOs() {
     group = "Build"
     description = "Compile dynamic libraries loaded by the JVM fat jar for supported platforms."
-    val buildDir = layout.buildDirectory
+    val buildDir = layout.buildDirectory.get().asFile
     val directory = "$buildDir/realmMacOsBuild"
 
     val injectedExecOps = project.objects.newInstance<ExecOpsProvider>()
@@ -583,7 +583,7 @@ fun Task.buildSharedLibrariesForJVMMacOs() {
 fun Task.buildSharedLibrariesForJVMLinux() {
     group = "Build"
     description = "Compile dynamic libraries loaded by the JVM fat jar for supported platforms."
-    val buildDir = layout.buildDirectory
+    val buildDir = layout.buildDirectory.get().asFile
     val directory = "$buildDir/realmLinuxBuild"
 
     val injectedExecOps = project.objects.newInstance<ExecOpsProvider>()
@@ -618,7 +618,7 @@ fun Task.buildSharedLibrariesForJVMLinux() {
 fun Task.buildSharedLibrariesForJVMWindows() {
     group = "Build"
     description = "Compile dynamic libraries loaded by the JVM fat jar for supported platforms."
-    val buildDir = layout.buildDirectory
+    val buildDir = layout.buildDirectory.get().asFile
     val directory = "$buildDir/realmWindowsBuild"
 
     val injectedExecOps = project.objects.newInstance<ExecOpsProvider>()

@@ -30,7 +30,7 @@ java {
     withJavadocJar()
     sourceSets {
         main {
-            java.srcDir("$generatedSourceRoot/java")
+            java.srcDir(generatedSourceRoot.map { it.dir("java") })
         }
     }
 

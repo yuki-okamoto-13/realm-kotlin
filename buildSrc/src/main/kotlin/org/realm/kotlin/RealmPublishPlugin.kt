@@ -103,7 +103,6 @@ class RealmPublishPlugin : Plugin<Project> {
         val password: String = getPropertyValue(project, "GPG_private_password")
 
         with(project) {
-            plugins.apply(SigningPlugin::class.java)
             plugins.apply("maven-publish") // nmcp checks plugins by name to enable publication.
 
             // Create extension
@@ -115,7 +114,10 @@ class RealmPublishPlugin : Plugin<Project> {
                 if (ringFile.isEmpty()) project.logger.warn("ringFile is empty")
                 if (password.isEmpty()) project.logger.warn("password is empty")
             } else {
-                // Configure signing
+                // Configure signing. Only apply the plugin when keys are available, as the
+                // com.gradle.plugin-publish plugin otherwise tries to sign the plugin marker
+                // publication without a signatory and fails.
+                plugins.apply(SigningPlugin::class.java)
                 extensions.getByType<SigningExtension>().apply {
                     isRequired = true
                     useInMemoryPgpKeys(keyId, ringFile, password)

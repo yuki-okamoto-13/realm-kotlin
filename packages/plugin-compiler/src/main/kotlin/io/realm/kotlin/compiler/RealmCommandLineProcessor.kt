@@ -30,7 +30,7 @@ val featureListPathConfigurationKey: CompilerConfigurationKey<String> = Compiler
 @OptIn(ExperimentalCompilerApi::class)
 @AutoService(CommandLineProcessor::class)
 class RealmCommandLineProcessor : CommandLineProcessor {
-    override val pluginId: String = "io.realm.kotlin"
+    override val pluginId: String = Registrar.PLUGIN_ID
     override val pluginOptions: Collection<CliOption> = listOf(
         CliOption(
             optionName = "featureListPath",
