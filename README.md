@@ -17,12 +17,13 @@ gradlew needs to be run from the root directory rather than packages.
 
 ## Version compatibility
 
+Version 3.3.0 <==> Kotlin 2.4.21
 Version 3.2.9 <==> Kotlin 2.2.10
 Version 3.2.8-2 <==> Kotlin 2.2.0
 
 ## How to use:
 
-Replace the `io.realm.kotlin` maven group with `yuki.okamoto.realm.kotlin`, and use the `3.2.9` version.
+Replace the `io.realm.kotlin` maven group with `yuki.okamoto.realm.kotlin`, and use the `3.3.0` version.
 
 It's all published on Maven Central.
 You might need to add this at the top of your `settings.gradle[.kts]`:
