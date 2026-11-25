@@ -1,7 +1,78 @@
-## 3.0.0-SNAPSHOT (YYYY-MM-DD)
+
+## 3.2.8
+
+* updated Kotlin to 2.2.0
+* fixed build errors due to deprecations in Kotlin 2.2.0
+* gradle upped to 8.14.3
+* fixed syntax errors in build.gradle.kts in cinterop related to kotlinOptions for Mac ans iOS
+* fixed syntax errors in build.gradle.kts in cinterop related to KotlinCompile
+* fixed unknown jvmTarget issue when doing publish local
+* various other dependencies updates suitable for Kotlin 2.2.0
+
+## 3.2.7
+
+* avoided NullPointerException in SuspendableWriter
+* merged PR to fix publishToMavenLocal issue on MacOS, thanks to @tinoue
+* updated Java to 17 in Contributing.md
+* fixed missing name and description in pom in various packages
+
+## 3.2.6
+
+* built with Kotlin 2.1.20 compatible with 2.1.20
+
+## 3.2.5
+
+* various testing on Android app
+* fixed maven central package for Android
+
+## 3.2.4
+
+* preparing for publishing to maven central
+* amended routine to ensure signed packages are built
+* disabled packages of library-sync and test-sync
+* upped Kotlin to 2.1.10
+* upped gradle-kotlin-dsl-plugins to 5.2.0, atomicfu to 0.27.0
+
+## 3.2.3
+
+* fully rebranded (required) to prepare for publishing to maven
+* added useVersion("2.1.0") in root settings.gradle.kts
+* mass renamed packages containing "io.realm.kotlin" to "io.github.xilinjia.krdb" in files
+* mass renamed references containing "io/realm/kotlin" to "io/github/xilinjia/krdb" in files
+* mass restructured directories of io/realm/kotlin to io/github/xilinjia/krdb
+* the shell script rename_realm_kotlin_to_krdb.sh is used to rename packages and restructure directories
+  * it misses io.realm.kotlin in a couple files, which need to be changed manually 
+  * it misses io/realm/kotlin in a couple files, which need to be changed manually 
+
+## 3.2.2
+
+* set Android targetSDK to 35
+* included the publishing scripts from @PavelFedoseev https://github.com/realm/realm-kotlin/issues/1857#issuecomment-2621494944
+
+## 3.2.1
+
+* fixed local publishing errors (for jvm and Android)
+
+## 3.2.0
+
+* changed project structure to make Intellij IDE work, buildSrc is moved out of scope io.realm
+* gradlew should be run in the root directory rather than packages
+* testing are on dev versions, not supporting testing maven artifacts yet
+* updated a few dependencies
+
+## 3.1.0
+
+* updated to work with Kotlin 2.1.0
+* Coroutines tested with 1.10.1
+* Gradle version 8.12
+* Android Gradle Plugin version 8.7.3
+* Minimum Android SDK: 21
+* R8 version 8.7.18
+
+## 3.0.0 (2024-10-03)
 
 ### Breaking Changes
-* None.
+* [Sync] Atlas Device Sync related functionality has been removed from the project.
 
 ### Enhancements
 * None.
@@ -34,6 +105,36 @@
 * None.
 
 ### Enhancements
+* None.
+
+### Fixed
+* Via https://github.com/realm/realm-kotlin/pull/1826. Fix compiler crash caused by a change in Kotlin 2.0.20. (Issue [#1825](https://github.com/realm/realm-kotlin/issues/1825)). Thanks @KitsuneAlex.
+
+### Compatibility
+* File format: Generates Realms with file format v24 (reads and upgrades file format v10 or later).
+* Realm Studio 15.0.0 or above is required to open Realms created by this version.
+* This release is compatible with the following Kotlin releases:
+  * Kotlin 2.0.20 and above. Support for experimental K2-compilation with `kotlin.experimental.tryK2=true`.
+  * Ktor 2.1.2 and above.
+  * Coroutines 1.7.0 and above.
+  * AtomicFu 0.18.3 and above.
+  * The new memory model only. See https://github.com/realm/realm-kotlin#kotlin-memory-model-and-coroutine-compatibility
+* Minimum Kbson 0.4.0.
+* Minimum Gradle version: 7.2.
+* Minimum Android Gradle Plugin version: 7.1.3.
+* Minimum Android SDK: 16.
+* Minimum R8: 8.0.34.
+
+### Internal
+* None.
+
+
+## 2.2.0 (2024-09-13)
+
+### Breaking Changes
+* None.
+
+### Enhancements
 * Support Android 15 page size 16 KB. (Issue [#1787](https://github.com/realm/realm-kotlin/issues/1787) [JIRA](https://jira.mongodb.org/browse/RKOTLIN-1105)).
 * Reduce the size of the local transaction log produced by creating objects, improving the performance of insertion-heavy transactions (Core issue [realm/realm-core#7734](https://github.com/realm/realm-core/pull/7734)).
 * Performance has been improved for range queries on integers and timestamps. Requires that you use the "BETWEEN" operation in RQL or the Query::between() method when you build the query. (Core issue [realm/realm-core#7785](https://github.com/realm/realm-core/pull/7785))
@@ -49,7 +150,6 @@
 * [Sync] Client reset cycle detection now checks if the previous recovery attempt was made by the same core version, and if not attempts recovery again (Core issue [realm/realm-core#7944](https://github.com/realm/realm-core/pull/7944)).
 
 ### Fixed
-* Via https://github.com/realm/realm-kotlin/pull/1826. Fix compiler crash caused by a change in Kotlin 2.0.20. (Issue [#1825](https://github.com/realm/realm-kotlin/issues/1825)). Thanks @KitsuneAlex.
 * Comparing a numeric property with an argument list containing a string would throw. (Core issue [realm/realm-core#7714](https://github.com/realm/realm-core/issues/7714), since v2.0.0).
 * After compacting, a file upgrade would be triggered. This could cause loss of data if schema mode is SoftResetFile (Core issue [realm/realm-core#7747](https://github.com/realm/realm-core/issues/7747), since v1.15.0).
 * Encrypted files on Windows had a maximum size of 2GB even on x64 due to internal usage of `off_t`, which is a 32-bit type on 64-bit Windows (Core issue [realm/realm-core#7698](https://github.com/realm/realm-core/pull/7698)).
@@ -91,36 +191,6 @@
 ### Internal
 * Updated to Realm Core 14.12.0 commit c2552e1d36867cb42b28130e894a81fc17081062.
 * Updated to Sync protocol version 14 to support server intiated bootstraps and role change updates without a client reset. (Core issue [realm/realm-core#7440](https://github.com/realm/realm-core/pull/7440)).
-
-
-## 2.1.1-SNAPSHOT (YYYY-MM-DD)
-
-### Breaking Changes
-* None.
-
-### Enhancements
-* None.
-
-### Fixed
-* None.
-
-### Compatibility
-* File format: Generates Realms with file format v24 (reads and upgrades file format v10 or later).
-* Realm Studio 15.0.0 or above is required to open Realms created by this version.
-* This release is compatible with the following Kotlin releases:
-  * Kotlin 2.0.0 and above. Support for experimental K2-compilation with `kotlin.experimental.tryK2=true`.
-  * Ktor 2.1.2 and above.
-  * Coroutines 1.7.0 and above.
-  * AtomicFu 0.18.3 and above.
-  * The new memory model only. See https://github.com/realm/realm-kotlin#kotlin-memory-model-and-coroutine-compatibility
-* Minimum Kbson 0.4.0.
-* Minimum Gradle version: 7.2.
-* Minimum Android Gradle Plugin version: 7.1.3.
-* Minimum Android SDK: 16.
-* Minimum R8: 8.0.34.
-
-### Internal
-* None.
 
 
 ## 2.1.0 (2024-07-12)

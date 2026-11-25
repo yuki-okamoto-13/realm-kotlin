@@ -19,14 +19,12 @@ package io.realm.kotlin.compiler
 import com.google.auto.service.AutoService
 import io.realm.kotlin.compiler.fir.model.RealmModelRegistrar
 import org.jetbrains.kotlin.backend.common.extensions.IrGenerationExtension
-import org.jetbrains.kotlin.cli.common.CLIConfigurationKeys
-import org.jetbrains.kotlin.cli.common.messages.MessageCollector
-import org.jetbrains.kotlin.com.intellij.mock.MockProject
-import org.jetbrains.kotlin.com.intellij.openapi.extensions.LoadingOrder
+import org.jetbrains.kotlin.compiler.plugin.CompilerPluginRegistrar
 import org.jetbrains.kotlin.compiler.plugin.ExperimentalCompilerApi
 import org.jetbrains.kotlin.config.CompilerConfiguration
+import org.jetbrains.kotlin.config.MessageCollectorAccess
+import org.jetbrains.kotlin.config.messageCollector
 import org.jetbrains.kotlin.fir.extensions.FirExtensionRegistrarAdapter
-import org.jetbrains.kotlin.resolve.extensions.SyntheticResolveExtension
 
 /**
  * Registrar for the Realm compiler plugin.
@@ -46,58 +44,33 @@ import org.jetbrains.kotlin.resolve.extensions.SyntheticResolveExtension
  * The [RealmObjectCompanion] holds static information about the schema (members, primary key, etc.)
  * and utility methods for constructing objects, etc.
  */
-@Suppress("deprecation")
-@AutoService(org.jetbrains.kotlin.compiler.plugin.ComponentRegistrar::class)
+@AutoService(CompilerPluginRegistrar::class)
 @OptIn(ExperimentalCompilerApi::class)
-// TODO ComponentRegistrar is deprecated. Should be migrated to CompilerPluginRegistrar to support
-//  indicating whether plugin is k2-compatible, etc. See these issues for more context:
-//  - https://youtrack.jetbrains.com/issue/KT-52665/Deprecate-ComponentRegistrar
-//  - https://youtrack.jetbrains.com/issue/KT-55300
-class Registrar : org.jetbrains.kotlin.compiler.plugin.ComponentRegistrar {
-    override fun registerProjectComponents(
-        project: MockProject,
-        configuration: CompilerConfiguration
-    ) {
-        messageCollector =
-            configuration.get(CLIConfigurationKeys.MESSAGE_COLLECTOR_KEY, MessageCollector.NONE)
-        SchemaCollector.properties.clear()
+class Registrar : CompilerPluginRegistrar() {
 
-        // We load our extensions LAST to avoid exposing our internal attributes to other plugins,
-        // like serialization (issue https://github.com/realm/realm-kotlin/issues/1251).
-        project.extensionArea.run {
-            // Trigger generation of companion objects and addition of the RealmObjectCompanion to it
-            getExtensionPoint(SyntheticResolveExtension.extensionPointName).registerExtension(
-                RealmModelSyntheticCompanionExtension(),
-                LoadingOrder.LAST,
-                project
-            )
-            // Trigger generation of Realm specific methods in model classes:
-            // toString(), equals() and hashCode()
-            getExtensionPoint(SyntheticResolveExtension.extensionPointName).registerExtension(
-                RealmModelSyntheticMethodsExtension(),
-                LoadingOrder.LAST,
-                project
-            )
-
-            // K2: Register extension that modifies the API similarly to the above two
-            // SyntheticResolveExtensions
-            FirExtensionRegistrarAdapter.registerExtension(project, RealmModelRegistrar())
-
-            // Adds RealmObjectInternal properties, rewires accessors and adds static companion
-            // properties and methods
-            getExtensionPoint(IrGenerationExtension.extensionPointName).registerExtension(
-                RealmModelLoweringExtension(),
-                LoadingOrder.LAST,
-                project
-            )
-            configuration.get(bundleIdConfigurationKey)?.let { bundleId ->
-                getExtensionPoint(IrGenerationExtension.extensionPointName).registerExtension(
-                    SyncLoweringExtension(bundleId),
-                    project
-                )
-            }
-        }
-    }
+    // Must match RealmCommandLineProcessor.pluginId. Also used by `-Xcompiler-plugin-order`
+    // (see RealmCompilerSubplugin) to make sure our extensions run after kotlinx.serialization,
+    // so our internal attributes are not exposed to it (issue https://github.com/realm/realm-kotlin/issues/1251).
+    override val pluginId: String = PLUGIN_ID
 
     override val supportsK2: Boolean = true
+
+    @OptIn(MessageCollectorAccess::class)
+    override fun ExtensionStorage.registerExtensions(configuration: CompilerConfiguration) {
+        messageCollector = configuration.messageCollector
+        SchemaCollector.properties.clear()
+
+        // Generates companion objects (with RealmObjectCompanion) and the Realm specific
+        // toString(), equals() and hashCode() methods in model classes. Kotlin 2.4 only supports
+        // the K2 frontend, so the former K1 SyntheticResolveExtensions are no longer needed.
+        FirExtensionRegistrarAdapter.registerExtension(RealmModelRegistrar())
+
+        // Adds RealmObjectInternal properties, rewires accessors and adds static companion
+        // properties and methods
+        IrGenerationExtension.registerExtension(RealmModelLoweringExtension())
+    }
+
+    companion object {
+        const val PLUGIN_ID = "io.realm.kotlin"
+    }
 }

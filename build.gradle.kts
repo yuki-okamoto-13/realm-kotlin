@@ -1,3 +1,6 @@
+import org.jetbrains.kotlin.gradle.dsl.JvmTarget.Companion.fromTarget
+import java.util.Locale
+
 /*
  * Copyright 2020 Realm Inc.
  *
@@ -17,8 +20,15 @@
 
 buildscript {
     repositories {
-        jcenter()
+        mavenCentral()
     }
+    dependencies {
+        classpath("org.jetbrains.kotlin:kotlin-gradle-plugin:${Versions.kotlin}")
+    }
+}
+
+plugins {
+    id("realm-publisher")
 }
 
 // Find property in either System environment or Gradle properties.
@@ -34,23 +44,26 @@ fun getPropertyValue(propertyName: String, throwIfNotFound: Boolean = false): St
 }
 
 // Cache dir for build artifacts that should be stored on S3
-val releaseMetaDataDir = File("${buildDir}/outputs/s3")
-releaseMetaDataDir.mkdirs()
+val releaseMetaDataDir = layout.buildDirectory.dir("outputs/s3").map {
+    it.apply { asFile.mkdirs() }
+}
 
-fun readAndCacheVersion(): String {
-    val constants: String = File("${projectDir.absolutePath}/buildSrc/src/main/kotlin/Config.kt").readText();
+fun readAndCacheVersion(releaseMetaDataDir: File): String {
+    val constants: String = File("${projectDir.absolutePath}/buildSrc/src/main/kotlin/Config.kt").readText()
     val regex = "const val version = \"(.*?)\"".toRegex()
     val match: MatchResult = regex.find(constants) ?: throw GradleException("Could not find current Realm version")
     val version: String = match.groups[1]!!.value
-    val versionFile = File(releaseMetaDataDir, "version.txt")
+    val versionFile = releaseMetaDataDir.resolve("version.txt")
     versionFile.createNewFile()
     versionFile.writeText(version)
     return version
 }
-val currentVersion = readAndCacheVersion()
+val currentVersion = releaseMetaDataDir.map { readAndCacheVersion(it.asFile) }
 val subprojects = listOf("packages", "examples/kmm-sample", "benchmarks")
 fun taskName(subdir: String): String {
-    return subdir.split("/", "-").map { it.capitalize() }.joinToString(separator = "")
+    return subdir.split("/", "-").joinToString(separator = "") {
+        it.replaceFirstChar { c -> if (c.isLowerCase()) c.titlecase(Locale.ROOT) else c.toString() }
+    }
 }
 
 fun copyProperties(action: GradleBuild) {
@@ -64,8 +77,27 @@ fun copyProperties(action: GradleBuild) {
     }
 }
 
-tasks {
+allprojects {
+   version = Realm.version
+   group = Realm.group
 
+   // Define JVM bytecode target for all Kotlin targets
+   tasks.withType<org.jetbrains.kotlin.gradle.tasks.KotlinJvmCompile> {
+       compilerOptions {
+           jvmTarget.set(fromTarget(Versions.kotlinJvmTarget))
+       }
+   }
+}
+
+// Define an interface to allow Gradle to inject the ExecOperations service.
+// This is the required mechanism for running external processes inside non-Exec tasks.
+// See Gradle doc: https://docs.gradle.org/current/userguide/service_injection.html#execoperations
+interface ExecOpsProvider {
+    @get:Inject
+    val execOps: ExecOperations
+}
+
+tasks {
     register("ktlintCheck") {
         description = "Runs ktlintCheck on all projects."
         group = "Verification"
@@ -105,15 +137,15 @@ tasks {
     register<GradleBuild>("mavenCentralUpload") {
         description = "Push all Realm artifacts to Maven Central"
         group = "Publishing"
-        buildFile = file("${rootDir}/packages/build.gradle.kts")
+        dir = file("${rootDir}/packages")
         tasks = listOf("publishToSonatype")
         copyProperties(this)
     }
 
     // TODO Verify we can actually use these debug symbols
     val archiveDebugSymbols by register("archiveDebugSymbols", Zip::class) {
-        archiveName = "realm-kotlin-jni-libs-unstripped-${currentVersion}.zip"
-        destinationDir = releaseMetaDataDir
+//        archiveName = "realm-kotlin-jni-libs-unstripped-${currentVersion}.zip"
+//        destinationDir = releaseMetaDataDir
         from("${rootDir}/packages/cinterop/build/intermediates/merged_native_libs/release/out/lib") {
             include("**/*.so")
         }
@@ -139,17 +171,20 @@ tasks {
 
     val uploadDebugSymbols by register("uploadDebugSymbols", Task::class) {
         dependsOn.addAll(listOf(archiveDebugSymbols, verifyS3Access))
+
+        val injectedExecOps = project.objects.newInstance<ExecOpsProvider>()
+
         doLast {
-            exec {
+            injectedExecOps.execOps.exec {
                 val s3AccessKey = getPropertyValue("REALM_S3_ACCESS_KEY")
                 val s3SecretKey = getPropertyValue("REALM_S3_SECRET_KEY")
-                workingDir = File("${buildDir}/outputs/s3/")
+                workingDir = releaseMetaDataDir.get().asFile
                 commandLine = listOf(
                         "s3cmd",
                         "--access_key=${s3AccessKey}",
                         "--secret_key=${s3SecretKey}",
                         "put",
-                        "realm-kotlin-jni-libs-unstripped-${currentVersion}.zip",
+                        "realm-kotlin-jni-libs-unstripped-${currentVersion.get()}.zip",
                         "s3://static.realm.io/downloads/kotlin/"
                 )
             }
@@ -160,13 +195,14 @@ tasks {
         dependsOn.add(verifyS3Access)
         val s3AccessKey = getPropertyValue("REALM_S3_ACCESS_KEY")
         val s3SecretKey = getPropertyValue("REALM_S3_SECRET_KEY")
-        File("$buildDir/outputs/s3", "version.txt").writeText(currentVersion)
+        val versionFile = releaseMetaDataDir.map { it.file("version.txt") }.get().asFile
+        versionFile.writeText(currentVersion.get())
         commandLine = listOf(
                 "s3cmd",
                 "--access_key=${s3AccessKey}",
                 "--secret_key=${s3SecretKey}",
                 "put",
-                "${buildDir}/outputs/s3/version.txt",
+                "$versionFile",
                 "s3://static.realm.io/update/kotlin")
     }
 
@@ -175,4 +211,119 @@ tasks {
         description = "Upload release metadata to S3 (Native debug symbols, version files)"
         dependsOn.addAll(listOf(uploadDebugSymbols, updateS3VersionFile))
     }
+
+     register<Task>("publishCIPackages") {
+         group = "Publishing"
+         description = "Publish packages that has been configured for this CI node. See `gradle.properties`."
+
+         // Figure out which targets are configured. This will impact which sub modules will be published
+         val availableTargets = setOf(
+             "iosArm64",
+             "iosX64",
+             "jvm",
+             "macosX64",
+             "macosArm64",
+             "android",
+             "metadata",
+             "compilerPlugin",
+             "gradlePlugin"
+         )
+
+         val mainHostTarget: Set<String> = setOf("metadata") // "kotlinMultiplatform"
+
+         val isMainHost: Boolean = project.properties["realm.kotlin.mainHost"]?.let { it == "true" } ?: false
+
+         // Find user configured platforms (if any)
+         val userTargets: Set<String>? = (project.properties["realm.kotlin.targets"] as String?)
+             ?.split(",")
+             ?.map { it.trim() }
+             ?.filter { it.isNotEmpty() }
+             ?.toSet()
+
+         userTargets?.forEach {
+             if (!availableTargets.contains(it)) {
+                 project.logger.error("Unknown publication: $it")
+                 throw IllegalArgumentException("Unknown publication: $it")
+             }
+         }
+
+         // Configure which platforms publications we do want to publish
+         val publicationTargets = (userTargets ?: availableTargets).let {
+             when (isMainHost) {
+                 true -> it + mainHostTarget
+                 false -> it - mainHostTarget
+             }
+         }
+
+         publicationTargets.forEach { target: String ->
+             when (target) {
+                 "iosArm64" -> {
+                     dependsOn(
+                         ":packages:cinterop:publishIosArm64PublicationToTestRepository",
+                         ":packages:cinterop:publishIosSimulatorArm64PublicationToTestRepository",
+                         ":packages:library-base:publishIosArm64PublicationToTestRepository",
+                         ":packages:library-base:publishIosSimulatorArm64PublicationToTestRepository",
+//                         ":packages:library-sync:publishIosArm64PublicationToTestRepository",
+//                         ":packages:library-sync:publishIosSimulatorArm64PublicationToTestRepository",
+                     )
+                 }
+                 "iosX64" -> {
+                     dependsOn(
+                         ":packages:cinterop:publishIosX64PublicationToTestRepository",
+                         ":packages:library-base:publishIosX64PublicationToTestRepository",
+//                         ":packages:library-sync:publishIosX64PublicationToTestRepository",
+                     )
+                 }
+                 "jvm" -> {
+                     dependsOn(
+                         ":packages:jni-swig-stub:publishAllPublicationsToTestRepository",
+                         ":packages:cinterop:publishJvmPublicationToTestRepository",
+                         ":packages:library-base:publishJvmPublicationToTestRepository",
+//                         ":packages:library-sync:publishJvmPublicationToTestRepository",
+                     )
+                 }
+                 "macosX64" -> {
+                     dependsOn(
+                         ":packages:cinterop:publishMacosX64PublicationToTestRepository",
+                         ":packages:library-base:publishMacosX64PublicationToTestRepository",
+//                         ":packages:library-sync:publishMacosX64PublicationToTestRepository",
+                     )
+                 }
+                 "macosArm64" -> {
+                     dependsOn(
+                         ":packages:cinterop:publishMacosArm64PublicationToTestRepository",
+                         ":packages:library-base:publishMacosArm64PublicationToTestRepository",
+//                         ":packages:library-sync:publishMacosArm64PublicationToTestRepository",
+                     )
+                 }
+                 "android" -> {
+                     dependsOn(
+                         ":packages:jni-swig-stub:publishAllPublicationsToTestRepository",
+                         ":packages:cinterop:publishAndroidReleasePublicationToTestRepository",
+                         ":packages:library-base:publishAndroidReleasePublicationToTestRepository",
+//                         ":packages:library-sync:publishAndroidReleasePublicationToTestRepository",
+                     )
+                 }
+                 "metadata" -> {
+                     dependsOn(
+                         ":packages:cinterop:publishKotlinMultiplatformPublicationToTestRepository",
+                         ":packages:library-base:publishKotlinMultiplatformPublicationToTestRepository",
+//                         ":packages:library-sync:publishKotlinMultiplatformPublicationToTestRepository",
+                     )
+                 }
+                 "compilerPlugin" -> {
+                     dependsOn(
+                         ":packages:plugin-compiler:publishAllPublicationsToTestRepository",
+                         ":packages:plugin-compiler-shaded:publishAllPublicationsToTestRepository"
+                     )
+                 }
+                 "gradlePlugin" -> {
+                     dependsOn(":packages:gradle-plugin:publishAllPublicationsToTestRepository")
+                 }
+                 else -> {
+                     throw IllegalArgumentException("Unsupported target: $target")
+                 }
+             }
+         }
+     }
 }

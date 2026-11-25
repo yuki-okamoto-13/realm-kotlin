@@ -24,14 +24,9 @@ plugins {
     id("realm-publisher")
     id("org.jetbrains.dokka")
     kotlin("plugin.serialization") version Versions.kotlin
+    id("org.jetbrains.kotlinx.atomicfu") version Versions.atomicfuPlugin
 }
 
-buildscript {
-    dependencies {
-        classpath("org.jetbrains.kotlinx:atomicfu-gradle-plugin:${Versions.atomicfu}")
-    }
-}
-apply(plugin = "kotlinx-atomicfu")
 // AtomicFu cannot transform JVM code. Maybe an issue with using IR backend. Throws
 // ClassCastException: org.objectweb.asm.tree.InsnList cannot be cast to java.lang.Iterable
 project.extensions.configure(kotlinx.atomicfu.plugin.gradle.AtomicFUPluginExtension::class) {
@@ -53,6 +48,7 @@ kotlin {
     macosX64()
     macosArm64()
 
+    @Suppress("unused")
     sourceSets {
         val commonMain by getting {
             dependencies {
@@ -64,7 +60,7 @@ kotlin {
 
                 // NOTE: scope needs to be API since 'implementation' will produce a POM with 'runtime' scope
                 //       causing the compiler plugin to fail to lookup classes from the 'cinterop' package
-                api(project(":cinterop"))
+                api(project(":packages:cinterop"))
                 implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core:${Versions.coroutines}")
                 implementation("org.jetbrains.kotlinx:atomicfu:${Versions.atomicfu}")
                 implementation("org.jetbrains.kotlinx:kotlinx-serialization-core:${Versions.serialization}")
@@ -148,7 +144,7 @@ android {
 
     defaultConfig {
         minSdk = Versions.Android.minSdk
-        targetSdk = Versions.Android.targetSdk
+        lint.targetSdk = Versions.Android.targetSdk
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
 
         sourceSets {
@@ -179,7 +175,7 @@ android {
         buildConfig = false
     }
 
-    packagingOptions {
+    packaging {
         jniLibs {
             useLegacyPackaging = true
         }
@@ -191,11 +187,11 @@ realmPublish {
         name = "Library"
         description = "Library code for Realm Kotlin. This artifact is not " +
             "supposed to be consumed directly, but through " +
-            "'io.realm.kotlin:gradle-plugin:${Realm.version}' instead."
+            "'yuki.okamoto.realm.kotlin:gradle-plugin:${Realm.version}' instead."
     }
 }
 
-tasks.withType<org.jetbrains.dokka.gradle.DokkaTaskPartial>().configureEach {
+dokka {
     moduleName.set("Realm Kotlin SDK")
     moduleVersion.set(Realm.version)
     dokkaSourceSets {
@@ -220,7 +216,30 @@ tasks.withType<org.jetbrains.dokka.gradle.DokkaTaskPartial>().configureEach {
                 "src/commonMain/kotlin/io/realm/kotlin/info.md",
                 "src/commonMain/kotlin/io/realm/kotlin/log/info.md"
             )
-            sourceRoot("../runtime-api/src/commonMain/kotlin")
+            sourceRoots.from("../runtime-api/src/commonMain/kotlin")
+        }
+    }
+}
+
+tasks.matching { it.name.endsWith("PublicationToMavenLocal") }.configureEach {
+    val signTasks = project.tasks.filter { t -> t.name.startsWith("sign") && t.name.endsWith("Publication") }
+    if (signTasks.isNotEmpty()) {
+        dependsOn(signTasks)
+        doFirst {
+            logger.info("Ensuring signing tasks (${signTasks.joinToString { it.name }}) run before $name in :cinterop")
+        }
+    } else {
+        logger.warn("No signing tasks found for $name in :cinterop")
+    }
+}
+
+// CHANGED: Removed afterEvaluate block, replaced with configureEach for specific tasks
+tasks.named("publishKotlinMultiplatformPublicationToMavenLocal") {
+    val signJvm = project.tasks.findByName("signJvmPublication")
+    if (signJvm != null) {
+        dependsOn(signJvm)
+        doFirst {
+            logger.info("Explicitly ensured :publishKotlinMultiplatformPublicationToMavenLocal depends on :signJvmPublication")
         }
     }
 }
@@ -248,5 +267,8 @@ publishing {
     val common = publications.getByName("kotlinMultiplatform") as MavenPublication
     // Configuration through examples/kmm-sample does not work if we do not resolve the tasks
     // completely, hence the .get() below.
-    common.artifact(tasks.named("dokkaJar").get())
+
+    // We don't really need to publish dokkaJar, but if we wanted to bring it back, we can just
+    // uncomment the line below and have it published with the artifacts.
+//    common.artifact(tasks.named("dokkaJar").get())
 }

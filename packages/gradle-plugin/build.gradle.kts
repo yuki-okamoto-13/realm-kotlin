@@ -40,29 +40,23 @@ dependencies {
 val mavenPublicationName = "gradlePlugin"
 
 fun createMarkerArtifact(): Boolean {
-    val value = properties.getOrDefault("generatePluginArtifactMarker", "false") as String
+    val value = properties.getOrDefault("generatePluginArtifactMarker", "true") as String
     return value.toBoolean()
 }
 
-pluginBundle {
-    website = "https://github.com/realm/realm-kotlin"
-    vcsUrl = "https://github.com/realm/realm-kotlin"
-    tags = listOf("MongoDB", "Realm", "Database", "Kotlin", "Mobile", "Multiplatform", "Android", "KMM")
-
-    mavenCoordinates {
-        groupId = Realm.group
-        artifactId = Realm.gradlePluginId
-        version = Realm.version
-    }
-}
+group = Realm.group
+version = Realm.version
 
 gradlePlugin {
+    website = "https://github.com/Infomaniak/realm-kotlin"
+    vcsUrl = "git@github.com:Infomaniak/realm-kotlin.git"
     plugins {
         create("RealmPlugin") {
             id = Realm.pluginPortalId
             displayName = "Realm Kotlin Plugin"
             description = "Gradle plugin for the Realm Kotlin SDK, supporting Android and Multiplatform. " +
-                "Realm is a mobile database: Build better apps faster."
+                    "Realm is a mobile database: Build better apps faster."
+            tags = listOf("MongoDB", "Realm", "Database", "Kotlin", "Mobile", "Multiplatform", "Android", "KMP")
             implementationClass = "io.realm.kotlin.gradle.RealmPlugin"
         }
         isAutomatedPublishing = createMarkerArtifact()
@@ -76,15 +70,6 @@ realmPublish {
     }
 }
 
-publishing {
-    publications {
-        register<MavenPublication>(mavenPublicationName) {
-            artifactId = Realm.gradlePluginId
-            from(components["java"])
-        }
-    }
-}
-
 java {
     withSourcesJar()
     withJavadocJar()
@@ -93,7 +78,7 @@ java {
 }
 
 // Make version information available at runtime
-val versionDirectory = "$buildDir/generated/source/version/"
+val versionDirectory = layout.buildDirectory.dir("generated/source/version/")
 sourceSets {
     main {
         java.srcDir(versionDirectory)
@@ -101,28 +86,27 @@ sourceSets {
 }
 
 // Task to generate gradle plugin runtime constants for SDK and core versions
-val versionConstants: Task = tasks.create("versionConstants") {
+val versionConstants = tasks.register("versionConstants") {
     val coreDependenciesFile = layout.projectDirectory.file(
         listOf("..", "external", "core", "dependencies.yml").joinToString(File.separator)
     )
     inputs.file(coreDependenciesFile)
     inputs.property("version", project.version)
-    val outputDir = file(versionDirectory)
-    outputs.dir(outputDir)
+    outputs.dir(versionDirectory)
 
     val yaml = Yaml()
     val coreDependencies: Map<String, String> = yaml.load(FileInputStream(coreDependenciesFile.asFile))
     val coreVersion = coreDependencies["VERSION"]
 
     doLast {
-        val versionFile = file("$outputDir/io/realm/kotlin/gradle/version.kt")
+        val versionFile = versionDirectory.get().file("io/realm/kotlin/gradle/version.kt").asFile
         versionFile.parentFile.mkdirs()
         versionFile.writeText(
             """
             // Generated file. Do not edit!
             package io.realm.kotlin.gradle
             internal const val PLUGIN_VERSION = "${project.version}"
-            internal const val CORE_VERSION = "${coreVersion}"
+            internal const val CORE_VERSION = "$coreVersion"
             """.trimIndent()
         )
     }
@@ -130,6 +114,3 @@ val versionConstants: Task = tasks.create("versionConstants") {
 
 tasks.getByName("compileKotlin").dependsOn(versionConstants)
 tasks.getByName("sourcesJar").dependsOn(versionConstants)
-afterEvaluate {
-    tasks.getByName("publishPluginJar").dependsOn(versionConstants)
-}
