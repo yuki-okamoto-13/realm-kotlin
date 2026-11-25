@@ -17,7 +17,7 @@
 
 plugins {
     kotlin("multiplatform")
-    id("com.infomaniak.realm.kotlin")
+    id("yuki.okamoto.realm.kotlin")
 }
 
 kotlin {
@@ -42,7 +42,7 @@ kotlin {
     sourceSets {
         val commonMain by getting {
             dependencies {
-                implementation("com.infomaniak.realm.kotlin:library-base:${Realm.version}")
+                implementation("yuki.okamoto.realm.kotlin:library-base:${Realm.version}")
             }
         }
         val commonTest by getting {

@@ -28,12 +28,12 @@ class RealmCompilerSubplugin : KotlinCompilerPluginSupportPlugin {
         // TODO LATER Consider embedding these from the build.gradle's versionConstants task just
         //  as with the version. But leave it for now as they should be quite stable.
         // Modules has to match ${project.group}:${project.name} to make composite build work
-        const val groupId = "com.infomaniak.realm.kotlin"
+        const val groupId = "yuki.okamoto.realm.kotlin"
         const val artifactId = "plugin-compiler"
         const val version = PLUGIN_VERSION
 
         // The id used for passing compiler options from command line
-        const val compilerPluginId = "com.infomaniak.realm.kotlin"
+        const val compilerPluginId = "yuki.okamoto.realm.kotlin"
 
         // `pluginId`s of the compiler plugins' `CompilerPluginRegistrar`s, used for ordering them.
         private const val REALM_COMPILER_PLUGIN_ID = "io.realm.kotlin"

@@ -3,7 +3,7 @@ import org.jetbrains.kotlin.gradle.tasks.KotlinCompilationTask
 plugins {
     kotlin("multiplatform")
     id("com.android.library")
-    id("com.infomaniak.realm.kotlin")
+    id("yuki.okamoto.realm.kotlin")
 }
 
 version = "1.0"
@@ -17,7 +17,7 @@ kotlin {
         val commonTest by getting
         val androidMain by getting {
             dependencies {
-                implementation("com.infomaniak.realm.kotlin:library-base:${rootProject.ext["realmVersion"]}")
+                implementation("yuki.okamoto.realm.kotlin:library-base:${rootProject.ext["realmVersion"]}")
             }
         }
         val androidInstrumentedTest by getting

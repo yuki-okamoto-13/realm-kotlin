@@ -30,7 +30,7 @@ buildscript {
     }
     dependencies {
         classpath ("io.realm:realm-gradle-plugin:10.11.0")
-        classpath ("com.infomaniak.realm.kotlin:gradle-plugin:${Realm.version}")
+        classpath ("yuki.okamoto.realm.kotlin:gradle-plugin:${Realm.version}")
     }
 }
 
